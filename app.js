@@ -336,7 +336,7 @@ function downloadRecoveryCopy(key){
   try{
     const saved=JSON.parse(localStorage.getItem(key)||'null');
     if(!saved)return toast('Geen herstelpunt beschikbaar');
-    const data=key===RECOVERY_BACKUP_KEY?JSON.parse(saved.raw):saved.data;
+    const data=key===RECOVERY_BACKUP_KEY?(saved.state||JSON.parse(saved.raw)):saved.data;
     validateStateData(data);
     downloadJson(data,`football-coach-herstel-${TODAY()}.json`);
     toast('Herstelkopie gedownload');
@@ -758,7 +758,7 @@ async function importBackup(file){
     normalize();
     state.meta.updatedAt=new Date().toISOString();
     const serialized=JSON.stringify(state);
-    localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:previousRaw??JSON.stringify(previousState)}));
+    localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:previousRaw??JSON.stringify(previousState),state:storageLoadError?null:clone(previousState)}));
     localStorage.setItem(STORAGE_KEY,serialized);
     storageLoadError=null;
     freshInstall=false;
@@ -803,7 +803,7 @@ function persistRemoteCopy(data){
   try{
     state=normalizedStateCopy(data);
     const serialized=JSON.stringify(state);
-    localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:previousRaw??JSON.stringify(previous)}));
+    localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:previousRaw??JSON.stringify(previous),state:storageLoadError?null:clone(previous)}));
     localStorage.setItem(STORAGE_KEY,serialized);
     storageLoadError=null;freshInstall=false;
   }catch(e){state=previous;ui.teamId=previousTeamId;throw e}
@@ -1010,7 +1010,7 @@ function handleClick(e){
   if(b.hasAttribute('data-download-recovery'))return downloadRecoveryCopy(RECOVERY_BACKUP_KEY);
   if(b.hasAttribute('data-download-cloud-conflict'))return downloadRecoveryCopy(CLOUD_CONFLICT_KEY);
   if(b.hasAttribute('data-import')){$('#importFile').click();return}
-  if(b.hasAttribute('data-reset')){if(confirm('Alle lokale wijzigingen vervangen door de oorspronkelijke startdata? Er wordt eerst een herstelpunt van de huidige opslag bewaard.')){try{const raw=localStorage.getItem(STORAGE_KEY)??localStorage.getItem(LEGACY_STORAGE_KEY);localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:raw??JSON.stringify(state)}));storageLoadError=null;state=clone(window.STARTER_DATA);normalize();save();toast('Startdata teruggezet; vorige versie staat in herstelpunt')}catch(e){toast('Terugzetten mislukt; bestaande gegevens zijn behouden: '+e.message)}}return}
+  if(b.hasAttribute('data-reset')){if(confirm('Alle lokale wijzigingen vervangen door de oorspronkelijke startdata? Er wordt eerst een herstelpunt van de huidige opslag bewaard.')){try{const raw=localStorage.getItem(STORAGE_KEY)??localStorage.getItem(LEGACY_STORAGE_KEY);localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:raw??JSON.stringify(state),state:storageLoadError?null:clone(state)}));storageLoadError=null;state=clone(window.STARTER_DATA);normalize();save();toast('Startdata teruggezet; vorige versie staat in herstelpunt')}catch(e){toast('Terugzetten mislukt; bestaande gegevens zijn behouden: '+e.message)}}return}
   if(b.hasAttribute('data-save-sync')){const pass=$('#syncPass').value.trim();if(!pass){localStorage.removeItem(SYNC_KEY);renderPage();toast('Secret key verwijderd');return}localStorage.setItem(SYNC_KEY,JSON.stringify({pass}));renderPage();toast('Secret key opgeslagen');initialSync();return}
   if(b.hasAttribute('data-push-sync'))return pushSync();
   if(b.hasAttribute('data-pull-sync'))return pullSync();
