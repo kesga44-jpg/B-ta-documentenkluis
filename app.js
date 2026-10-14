@@ -809,6 +809,25 @@ function persistRemoteCopy(data){
   }catch(e){state=previous;ui.teamId=previousTeamId;throw e}
   renderPage();
 }
+async function writeCloudCopy(s,id,local,cloud){
+  const payload=await encryptData(local,s.pass);
+  let r;
+  if(cloud){
+    const expected=Date.parse(cloud.updatedAt);
+    if(!Number.isFinite(expected))throw new Error('Cloudkopie mist geldige wijzigingsmetadata; upload afgebroken');
+    const updatedAt=new Date(Math.max(Date.now(),expected+1)).toISOString();
+    r=await fetch(s.url.replace(/\/$/,'')+'/rest/v1/coach_data?id=eq.'+encodeURIComponent(id)+'&updated_at=eq.'+encodeURIComponent(cloud.updatedAt),{method:'PATCH',headers:{apikey:s.key,Authorization:'Bearer '+s.key,'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({payload,updated_at:updatedAt})});
+  }else{
+    r=await fetch(s.url.replace(/\/$/,'')+'/rest/v1/coach_data?on_conflict=id',{method:'POST',headers:{apikey:s.key,Authorization:'Bearer '+s.key,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates,return=representation'},body:JSON.stringify([{id,payload,updated_at:new Date().toISOString()}])});
+  }
+  if(!r.ok)throw new Error(await r.text());
+  const rows=await r.json();
+  if(Array.isArray(rows)&&rows.length)return true;
+  const latest=await fetchCloudCopy(s,id);
+  if(latest)preserveCloudConflict(latest);
+  syncStatus('Syncconflict: clouddata is intussen gewijzigd of bestaat al. De nieuwste cloudversie is behouden; controleer beide versies.');
+  return false;
+}
 async function pushSync(silent=false){
   const s=getSync();if(!syncConfigured()||syncInFlight||storageLoadError)return;
   syncInFlight=true;
@@ -819,9 +838,8 @@ async function pushSync(silent=false){
       if(silent){syncStatus('Syncconflict: lokale en cloudgegevens verschillen. Cloudversie is bewaard; kies Download of bevestig handmatig Upload.');return}
       if(!confirm('De lokale en cloudgegevens verschillen. De cloudversie wordt eerst lokaal bewaard. Wil je de cloudversie vervangen door deze lokale versie?')){syncStatus('Syncconflict: beide versies behouden; geen gegevens overschreven.');return}
     }
-    syncStatus('Versleutelen en uploaden…');
-    const payload=await encryptData(local,s.pass),r=await fetch(s.url.replace(/\/$/,'')+'/rest/v1/coach_data?on_conflict=id',{method:'POST',headers:{apikey:s.key,Authorization:'Bearer '+s.key,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{id,payload,updated_at:new Date().toISOString()}])});
-    if(!r.ok)throw new Error(await r.text());
+    syncStatus('Versleutelen en veilig synchroniseren…');
+    if(!await writeCloudCopy(s,id,local,cloud)){if(!silent)toast('Syncconflict; de nieuwere cloudversie is behouden');return}
     syncStatus('Gesynchroniseerd · '+new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}));if(!silent)toast('Sync geüpload');
   }catch(e){syncStatus('Syncfout: '+e.message);if(!silent)toast('Sync mislukt')}
   finally{syncInFlight=false}
