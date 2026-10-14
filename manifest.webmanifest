@@ -1,8 +1,0 @@
-{
-  "name": "Documentenkluis Beta",
-  "short_name": "Documentenkluis",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#f4f6fb",
-  "theme_color": "#4c5d73"
-}
